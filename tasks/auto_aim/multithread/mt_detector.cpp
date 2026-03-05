@@ -79,6 +79,27 @@ std::tuple<std::list<Armor>, std::chrono::steady_clock::time_point> MultiThreadD
   return {std::move(armors), t};
 }
 
+std::optional<std::tuple<std::list<Armor>, std::chrono::steady_clock::time_point>>
+MultiThreadDetector::try_pop()
+{
+  using Elem = std::tuple<cv::Mat, std::chrono::steady_clock::time_point, ov::InferRequest>;
+  Elem elem;
+  if (!queue_.try_pop(elem)) return std::nullopt;
+
+  auto & [img, t, infer_request] = elem;
+  infer_request.wait();
+
+  auto output_tensor = infer_request.get_output_tensor();
+  auto output_shape = output_tensor.get_shape();
+  cv::Mat output(output_shape[1], output_shape[2], CV_32F, output_tensor.data());
+  auto x_scale = static_cast<double>(640) / img.rows;
+  auto y_scale = static_cast<double>(640) / img.cols;
+  auto scale = std::min(x_scale, y_scale);
+  auto armors = yolo_.postprocess(scale, output, img, 0);
+
+  return std::tuple{std::move(armors), t};
+}
+
 std::tuple<cv::Mat, std::list<Armor>, std::chrono::steady_clock::time_point>
 MultiThreadDetector::debug_pop()
 {

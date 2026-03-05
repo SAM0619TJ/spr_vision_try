@@ -57,6 +57,12 @@ exposure_ms: 2
 gain: 16
 vid_pid: "2bdf:0001"
 
+# camera_name: "mindvision"
+# exposure_ms: 2
+# gamma: 0.5
+# vid_pid: "f622:d132"
+
+
 # -1  0  0
 #  0 -1  0
 #  0  0  1
@@ -78,6 +84,7 @@ can_interface: "can0"
 
 #####-----gimbal参数-----#####
 com_port: "/dev/gimbal"
+baud_rate: 115200  # 与云台串口一致，常见: 9600, 115200, 921600
 
 #####-----planner-----#####
 fire_thresh: 0.003

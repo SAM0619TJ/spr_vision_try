@@ -33,7 +33,7 @@ usb_gain: 10 #0-96
 camera_name: "mindvision"
 exposure_ms: 2
 gamma: 0.5
-vid_pid: "f622:d13a"
+vid_pid: "f622:d132"
 
 #####-----传统方法参数-----#####
 threshold: 150

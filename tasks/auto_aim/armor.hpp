@@ -2,6 +2,7 @@
 #define AUTO_AIM__ARMOR_HPP
 
 #include <Eigen/Dense>
+#include <fmt/core.h>
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
@@ -121,5 +122,17 @@ struct Armor
 };
 
 }  // namespace auto_aim
+
+template <>
+struct fmt::formatter<auto_aim::ArmorName>
+{
+  constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+  template <typename FormatContext>
+  auto format(auto_aim::ArmorName name, FormatContext & ctx) const
+  {
+    return fmt::format_to(ctx.out(), "{}", auto_aim::ARMOR_NAMES[static_cast<size_t>(name)]);
+  }
+};
 
 #endif  // AUTO_AIM__ARMOR_HPP

@@ -1,0 +1,5 @@
+# 辅助摄像头 MindVision 配置
+camera_name: "mindvision"
+exposure_ms: 2
+gamma: 0.5
+vid_pid: "f622:d13a"

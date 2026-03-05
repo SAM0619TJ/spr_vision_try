@@ -1,6 +1,5 @@
 #include "gimbal.hpp"
 
-#include "tools/crc.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/yaml.hpp"
@@ -11,9 +10,15 @@ Gimbal::Gimbal(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
   auto com_port = tools::read<std::string>(yaml, "com_port");
+  uint32_t baud_rate = 115200;
+  if (yaml["baud_rate"]) baud_rate = yaml["baud_rate"].as<uint32_t>();
 
   try {
     serial_.setPort(com_port);
+    serial_.setBaudrate(baud_rate);
+    // 设置读超时，保证 read() 能等到完整一帧（否则易出现 error2 / 帧头误匹配）
+    serial::Timeout timeout = serial::Timeout::simpleTimeout(100);
+    serial_.setTimeout(timeout);
     serial_.open();
   } catch (const std::exception & e) {
     tools::logger()->error("[Gimbal] Failed to open serial: {}", e.what());
@@ -86,8 +91,7 @@ void Gimbal::send(io::VisionToGimbal VisionToGimbal)
   tx_data_.pitch = VisionToGimbal.pitch;
   tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-  tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+  tx_data_.tail = 0xef;  // 帧尾校验（原为 CRC16）
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -107,8 +111,7 @@ void Gimbal::send(
   tx_data_.pitch = pitch;
   tx_data_.pitch_vel = pitch_vel;
   tx_data_.pitch_acc = pitch_acc;
-  tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+  tx_data_.tail = 0xef;  // 帧尾校验（原为 CRC16）
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -122,7 +125,7 @@ bool Gimbal::read(uint8_t * buffer, size_t size)
   try {
     return serial_.read(buffer, size) == size;
   } catch (const std::exception & e) {
-    // tools::logger()->warn("[Gimbal] Failed to read serial: {}", e.what());
+    tools::logger()->warn("[Gimbal] Failed to read serial: {}", e.what());
     return false;
   }
 }
@@ -132,6 +135,10 @@ void Gimbal::read_thread()
   tools::logger()->info("[Gimbal] read_thread started.");
   int error_count = 0;
 
+  // 一字节滑动同步：未匹配到帧头时只丢弃第 1 字节，保留第 2 字节作为下一窗口首字节，避免错位后永远对不齐
+  uint8_t first = 0;
+  bool have_first = false;
+
   while (!quit_) {
     if (error_count > 5000) {
       error_count = 0;
@@ -140,12 +147,40 @@ void Gimbal::read_thread()
       continue;
     }
 
-    if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_.head))) {
+    // // ---------- 原方案（按 2 字节对齐，错位 1 字节无法恢复）：注释保留 ----------
+    // if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_.head))) {
+    //   error_count++;
+    //   tools::logger()->debug("[Gimbal] date error1 occurred.");
+    //   continue;
+    // }
+    // if (rx_data_.head[0] != 'S' || rx_data_.head[1] != 'P') continue;
+
+    // // 一字节滑动找帧头 0x53, 0x50
+    if (!have_first) {
+      if (!read(&first, 1)) {
+        error_count++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));  // 无数据时避免空转打满 error_count
+        continue;
+      }
+      have_first = true;
+    }
+    uint8_t second = 0;
+    if (!read(&second, 1)) {
       error_count++;
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
       continue;
     }
-
-    if (rx_data_.head[0] != 'S' || rx_data_.head[1] != 'P') continue;
+    if (first != 'S' || second != 'P') {
+      // 帧头不匹配时仅 trace 打印，避免刷屏（可改为 debug 排查同步问题）
+      tools::logger()->trace(
+        "[Gimbal] Frame head mismatch, got: 0x{:02x}, 0x{:02x}", first, second);
+      first = second;  // 丢 1 保 1
+      continue;
+    }
+    // tools::logger()->debug("[Gimbal] Frame head found (0x53, 0x50).");
+    rx_data_.head[0] = 'S';
+    rx_data_.head[1] = 'P';
+    have_first = false;
 
     auto t = std::chrono::steady_clock::now();
 
@@ -153,11 +188,13 @@ void Gimbal::read_thread()
           reinterpret_cast<uint8_t *>(&rx_data_) + sizeof(rx_data_.head),
           sizeof(rx_data_) - sizeof(rx_data_.head))) {
       error_count++;
+      tools::logger()->debug("[Gimbal] error2 occurred.");
       continue;
     }
 
-    if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      tools::logger()->debug("[Gimbal] CRC16 check failed.");
+    // 帧尾 0xef 校验（原为 CRC16，已注释）
+    if (rx_data_.tail != 0xef) {
+      tools::logger()->debug("[Gimbal] Frame tail check failed (expected 0xef).");
       continue;
     }
 

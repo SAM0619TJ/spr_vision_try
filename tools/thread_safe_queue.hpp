@@ -89,6 +89,16 @@ public:
     return queue_.empty();
   }
 
+  /** 非阻塞 pop，队列为空时返回 false */
+  bool try_pop(T & value)
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (queue_.empty()) return false;
+    value = std::move(queue_.front());
+    queue_.pop();
+    return true;
+  }
+
   void clear()
   {
     std::unique_lock<std::mutex> lock(mutex_);

@@ -4,6 +4,7 @@
 #include <chrono>
 #include <opencv2/opencv.hpp>
 #include <openvino/openvino.hpp>
+#include <optional>
 #include <tuple>
 
 #include "tasks/auto_aim/yolos/yolov5.hpp"
@@ -23,6 +24,9 @@ public:
   void push(cv::Mat img, std::chrono::steady_clock::time_point t);
 
   std::tuple<std::list<Armor>, std::chrono::steady_clock::time_point> pop();  //暂时不支持yolov8
+
+  /** 非阻塞获取，队列为空时返回 nullopt */
+  std::optional<std::tuple<std::list<Armor>, std::chrono::steady_clock::time_point>> try_pop();
 
   std::tuple<cv::Mat, std::list<Armor>, std::chrono::steady_clock::time_point> debug_pop();
 

@@ -1,0 +1,6 @@
+# 主摄像头 HikRobot 配置
+# 由 dual_camera.yaml 通过 config_path 合并或程序分别加载
+camera_name: "hikrobot"
+exposure_ms: 2
+gain: 16
+vid_pid: "2bdf:0001"

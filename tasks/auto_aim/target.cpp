@@ -263,6 +263,11 @@ bool Target::convergened()
   return is_converged_;
 }
 
+namespace
+{
+constexpr double OUTPOST_ARMOR_Z_STEP_M = 0.1;  // 前哨站三块装甲板 Z 向每两块差 100mm
+}
+
 // 计算出装甲板中心的坐标（考虑长短轴）
 Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
 {
@@ -272,7 +277,12 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
   auto r = (use_l_h) ? x[8] + x[9] : x[8];
   auto armor_x = x[0] - r * std::cos(angle);
   auto armor_y = x[2] - r * std::sin(angle);
-  auto armor_z = (use_l_h) ? x[4] + x[10] : x[4];
+  double armor_z;
+  if (name == ArmorName::outpost && armor_num_ == 3) {
+    armor_z = x[4] + id * OUTPOST_ARMOR_Z_STEP_M;
+  } else {
+    armor_z = (use_l_h) ? x[4] + x[10] : x[4];
+  }
 
   return {armor_x, armor_y, armor_z};
 }

@@ -156,6 +156,12 @@ IMU型号：使用C板内置BMI088作为IMU\
         ```
         SUBSYSTEM=="tty", ATTRS{idVendor}=="1234", ATTRS{idProduct}=="1234", ATTRS{serial}=="A1234567", SYMLINK+="gimbal"
         ```
+            ATTRS{idProduct}=="7523"
+    ATTRS{idVendor}=="1a86"
+    ATTRS{idProduct}=="0002"
+    ATTRS{idVendor}=="1d6b"
+    ATTRS{serial}=="0000:00:14.0"
+
     4. 重新加载 udev 规则
         ```
         sudo udevadm control --reload-rules
