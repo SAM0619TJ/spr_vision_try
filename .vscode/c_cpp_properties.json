@@ -8,12 +8,21 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/io/serial/include",
-                "/usr/include/opencv4",
-                "/usr/include/eigen3",
+                "/opt/homebrew/include",
+                "/opt/homebrew/include/opencv4",
+                "/opt/homebrew/include/eigen3",
                 "/opt/intel/openvino_2023.3.0/runtime/include/",
                 "/home/rm/sp_msg_25/install/sp_msgs/include/sp_msgs",
                 "/opt/ros/humble/include/**"
             ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "/opt/homebrew/include",
+                    "/opt/homebrew/include/eigen3"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "c17",
             "cppStandard": "gnu++17",
