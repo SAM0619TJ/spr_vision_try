@@ -21,6 +21,11 @@ roi:
 
 use_roi: false
 
+#####-----plotter参数-----#####
+plotter:
+  host: "10.122.173.126"
+  port: 9870
+
 #####-----USB相机参数-----#####
 image_width: 1280
 image_height: 720

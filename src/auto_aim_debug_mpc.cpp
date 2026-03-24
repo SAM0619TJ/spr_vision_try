@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
 #include <thread>
+#include <yaml-cpp/yaml.h>
 
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
@@ -28,7 +29,6 @@ const std::string keys =
 int main(int argc, char * argv[])
 {
   tools::Exiter exiter;
-  tools::Plotter plotter;
 
   cv::CommandLineParser cli(argc, argv, keys);
   auto config_path = cli.get<std::string>(0);
@@ -36,6 +36,15 @@ int main(int argc, char * argv[])
     cli.printMessage();
     return 0;
   }
+
+  auto config = YAML::LoadFile(config_path);
+  auto plotter_host = config["plotter"] && config["plotter"]["host"]
+                        ? config["plotter"]["host"].as<std::string>()
+                        : "127.0.0.1";
+  auto plotter_port = config["plotter"] && config["plotter"]["port"]
+                        ? config["plotter"]["port"].as<uint16_t>()
+                        : 9870;
+  tools::Plotter plotter(plotter_host, plotter_port);
 
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);

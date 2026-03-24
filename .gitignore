@@ -14,5 +14,7 @@ watchdog.sh
 records_24/
 records_25/
 .DS_Store
+.cache/
 c_cpp_properties.json
 neo/
+.clangd

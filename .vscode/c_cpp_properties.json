@@ -11,7 +11,7 @@
                 "/opt/homebrew/include",
                 "/opt/homebrew/include/opencv4",
                 "/opt/homebrew/include/eigen3",
-                "/opt/intel/openvino_2023.3.0/runtime/include/",
+                "/opt/intel/openvino_2024.6.0/runtime/include/",
                 "/home/rm/sp_msg_25/install/sp_msgs/include/sp_msgs",
                 "/opt/ros/humble/include/**"
             ],

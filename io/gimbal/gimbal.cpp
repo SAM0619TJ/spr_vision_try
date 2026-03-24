@@ -10,8 +10,7 @@ Gimbal::Gimbal(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
   auto com_port = tools::read<std::string>(yaml, "com_port");
-  uint32_t baud_rate = 115200;
-  if (yaml["baud_rate"]) baud_rate = yaml["baud_rate"].as<uint32_t>();
+  const uint32_t baud_rate = tools::read<uint32_t>(yaml, "baud_rate", 115200u);
 
   try {
     serial_.setPort(com_port);
@@ -20,6 +19,7 @@ Gimbal::Gimbal(const std::string & config_path)
     serial::Timeout timeout = serial::Timeout::simpleTimeout(100);
     serial_.setTimeout(timeout);
     serial_.open();
+    tools::logger()->info("[Gimbal] Serial {} @ {} baud", com_port, baud_rate);
   } catch (const std::exception & e) {
     tools::logger()->error("[Gimbal] Failed to open serial: {}", e.what());
     exit(1);
