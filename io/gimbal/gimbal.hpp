@@ -41,7 +41,6 @@ struct __attribute__((packed)) VisionToGimbal
   float pitch;
   float pitch_vel;
   float pitch_acc;
-  // uint16_t crc16;  // 原 CRC16 校验，已改为帧尾 0xef
   uint8_t tail = 0xef;  // 帧尾校验
 };
 
