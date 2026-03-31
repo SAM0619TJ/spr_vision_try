@@ -8,6 +8,8 @@
 #include <nlohmann/json.hpp>
 #include <opencv2/core/eigen.hpp>
 
+using namespace std::chrono_literals;
+
 #include "io/camera.hpp"
 #include "io/cboard.hpp"
 #include "tasks/auto_aim/solver.hpp"

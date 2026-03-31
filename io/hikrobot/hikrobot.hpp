@@ -1,6 +1,8 @@
 #ifndef IO__HIKROBOT_HPP
 #define IO__HIKROBOT_HPP
 
+#ifndef __APPLE__
+
 #include <atomic>
 #include <chrono>
 #include <opencv2/opencv.hpp>
@@ -52,5 +54,29 @@ private:
 };
 
 }  // namespace io
+
+#else  // __APPLE__
+
+#include <chrono>
+#include <opencv2/opencv.hpp>
+#include <stdexcept>
+#include <string>
+#include "io/camera.hpp"
+
+namespace io
+{
+class HikRobot : public CameraBase
+{
+public:
+  HikRobot(double, double, const std::string &)
+  {
+    throw std::runtime_error("HikRobot camera is not supported on macOS");
+  }
+  ~HikRobot() override = default;
+  void read(cv::Mat &, std::chrono::steady_clock::time_point &) override {}
+};
+}  // namespace io
+
+#endif  // __APPLE__
 
 #endif  // IO__HIKROBOT_HPP

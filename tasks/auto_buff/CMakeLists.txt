@@ -1,10 +1,26 @@
 cmake_minimum_required(VERSION 3.16)
-set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake")
+
+if(NOT DEFINED OpenVINO_DIR)
+  if(APPLE)
+    find_path(_OV_CMAKE_DIR "OpenVINOConfig.cmake"
+      PATHS
+        "$ENV{HOME}/intel/openvino/runtime/cmake"
+        "/usr/local/lib/cmake/openvino"
+        "/opt/homebrew/lib/cmake/openvino"
+      NO_DEFAULT_PATH
+    )
+    if(_OV_CMAKE_DIR)
+      set(OpenVINO_DIR "${_OV_CMAKE_DIR}")
+    endif()
+  else()
+    set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake")
+  endif()
+endif()
 
 find_package(OpenVINO REQUIRED)
 find_package(Ceres REQUIRED)
 
-add_library(auto_buff OBJECT 
+add_library(auto_buff OBJECT
     buff_type.cpp
     buff_detector.cpp
     buff_solver.cpp

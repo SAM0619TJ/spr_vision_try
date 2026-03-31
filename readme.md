@@ -145,16 +145,21 @@ IMU型号：使用C板内置BMI088作为IMU\
         ```
     2. 获取端口 ID（serial, idVendor, idProduct）
         ```
-        udevadm info -a -n /dev/ttyACM0 | grep -E '({serial}|{idVendor}|{idProduct})'
+        udevadm info -a -n /dev/ttyUSB1 | grep -E '({serial}|{idVendor}|{idProduct})'
         ```
-        将 /dev/ttyACM0 替换为实际设备名。
+        ```
+        udevadm info -a -n /dev/ttyUSB1 | grep KERNELS | head -n 1
+        ```
+        查找物理接口位置。
+        将 /dev/ttyUSB1 替换为实际设备名。
+
     3. 创建 udev 规则文件
         ```
         sudo touch /etc/udev/rules.d/99-usb-serial.rules
         ```
-        然后在文件中写入如下内容（用真实 ID 替换示例，SYMLINK 是规则应用后固定的串口名）：
+        然后在文件中写入如下内容（用真实 ID 替换示例，SYMLINK 是规则应用后固定的串口名，KERNELS为分配的准确物理接口）：
         ```
-        SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0002", ATTRS{serial}=="0000:00:14.0", SYMLINK+="gimbal"
+        SUBSYSTEM=="tty", KERNELS=="1-1.2"，ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0002", ATTRS{serial}=="0000:00:14.0", SYMLINK+="gimbal"
         ```
 
     4. 重新加载 udev 规则
@@ -166,7 +171,7 @@ IMU型号：使用C板内置BMI088作为IMU\
         ```
         ls -l /dev/gimbal
         # Expected output (example):
-        # lrwxrwxrwx 1 root root 7 Jul 21 10:00 /dev/gimbal -> ttyACM0
+        # lrwxrwxrwx 1 root root 7 Jul 21 10:00 /dev/gimbal -> ttyUSB0
         ```
 
 ### 3.3 数据流图

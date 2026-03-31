@@ -1,6 +1,8 @@
 #ifndef IO__MINDVISION_HPP
 #define IO__MINDVISION_HPP
 
+#ifndef __APPLE__
+
 #include <chrono>
 #include <opencv2/opencv.hpp>
 #include <thread>
@@ -42,5 +44,29 @@ private:
 };
 
 }  // namespace io
+
+#else  // __APPLE__
+
+#include <chrono>
+#include <opencv2/opencv.hpp>
+#include <stdexcept>
+#include <string>
+#include "io/camera.hpp"
+
+namespace io
+{
+class MindVision : public CameraBase
+{
+public:
+  MindVision(double, double, const std::string &)
+  {
+    throw std::runtime_error("MindVision camera is not supported on macOS");
+  }
+  ~MindVision() override = default;
+  void read(cv::Mat &, std::chrono::steady_clock::time_point &) override {}
+};
+}  // namespace io
+
+#endif  // __APPLE__
 
 #endif  // IO__MINDVISION_HPP

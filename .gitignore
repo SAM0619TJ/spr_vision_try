@@ -1,6 +1,7 @@
 .vscode/
 .github/
 build/
+build_macos/
 Camera/
 logs/
 assets/img_with_q/
@@ -18,3 +19,5 @@ records_25/
 c_cpp_properties.json
 neo/
 .clangd
+.cache/
+.claude/
