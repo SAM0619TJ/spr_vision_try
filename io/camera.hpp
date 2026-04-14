@@ -23,6 +23,7 @@ public:
 
 private:
   std::unique_ptr<CameraBase> camera_;
+  int flip_code_ = 2; // opencv flip code: 0 vertical, 1 horizontal, -1 both 2 default no flip
 };
 
 }  // namespace io
