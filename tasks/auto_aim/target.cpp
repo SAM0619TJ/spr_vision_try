@@ -7,6 +7,11 @@
 
 namespace auto_aim
 {
+namespace
+{
+constexpr double OUTPOST_ARMOR_Z_STEP_M = 0.1;  // 前哨站三块装甲板 Z 向每两块差 100mm
+}
+
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
   Eigen::VectorXd P0_dig)
@@ -139,32 +144,52 @@ void Target::update(const Armor & armor)
 {
   // 装甲板匹配
   int id;
-  auto min_angle_error = 1e10;
   const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
 
-  std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
-  for (int i = 0; i < armor_num_; i++) {
-    xyza_i_list.push_back({xyza_list[i], i});
-  }
+  if (name == ArmorName::outpost && armor_num_ == 3) {
+    double min_score = 1e10;
+    id = 0;
+    for (int i = 0; i < armor_num_; i++) {
+      Eigen::Vector3d predicted_ypd = tools::xyz2ypd(xyza_list[i].head(3));
+      double yaw_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza_list[i][3]));
+      double center_yaw_error =
+        std::abs(tools::limit_rad(armor.ypd_in_world[0] - predicted_ypd[0]));
+      double distance_error = std::abs(armor.ypd_in_world[2] - predicted_ypd[2]);
+      double z_error =
+        std::abs(armor.xyz_in_world[2] - xyza_list[i][2]) / OUTPOST_ARMOR_Z_STEP_M;
+      double score = z_error + 0.5 * yaw_error + 0.5 * center_yaw_error + 0.1 * distance_error;
 
-  std::sort(
-    xyza_i_list.begin(), xyza_i_list.end(),
-    [](const std::pair<Eigen::Vector4d, int> & a, const std::pair<Eigen::Vector4d, int> & b) {
-      Eigen::Vector3d ypd1 = tools::xyz2ypd(a.first.head(3));
-      Eigen::Vector3d ypd2 = tools::xyz2ypd(b.first.head(3));
-      return ypd1[2] < ypd2[2];
-    });
+      if (score < min_score) {
+        min_score = score;
+        id = i;
+      }
+    }
+  } else {
+    auto min_angle_error = 1e10;
+    std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
+    for (int i = 0; i < armor_num_; i++) {
+      xyza_i_list.push_back({xyza_list[i], i});
+    }
 
-  // 取前3个distance最小的装甲板
-  for (int i = 0; i < 3; i++) {
-    const auto & xyza = xyza_i_list[i].first;
-    Eigen::Vector3d ypd = tools::xyz2ypd(xyza.head(3));
-    auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza[3])) +
-                       std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
+    std::sort(
+      xyza_i_list.begin(), xyza_i_list.end(),
+      [](const std::pair<Eigen::Vector4d, int> & a, const std::pair<Eigen::Vector4d, int> & b) {
+        Eigen::Vector3d ypd1 = tools::xyz2ypd(a.first.head(3));
+        Eigen::Vector3d ypd2 = tools::xyz2ypd(b.first.head(3));
+        return ypd1[2] < ypd2[2];
+      });
 
-    if (std::abs(angle_error) < std::abs(min_angle_error)) {
-      id = xyza_i_list[i].second;
-      min_angle_error = angle_error;
+    // 取前3个distance最小的装甲板
+    for (int i = 0; i < 3; i++) {
+      const auto & xyza = xyza_i_list[i].first;
+      Eigen::Vector3d ypd = tools::xyz2ypd(xyza.head(3));
+      auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza[3])) +
+                         std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
+
+      if (std::abs(angle_error) < std::abs(min_angle_error)) {
+        id = xyza_i_list[i].second;
+        min_angle_error = angle_error;
+      }
     }
   }
 
@@ -261,11 +286,6 @@ bool Target::convergened()
   }
 
   return is_converged_;
-}
-
-namespace
-{
-constexpr double OUTPOST_ARMOR_Z_STEP_M = 0.1;  // 前哨站三块装甲板 Z 向每两块差 100mm
 }
 
 // 计算出装甲板中心的坐标（考虑长短轴）
