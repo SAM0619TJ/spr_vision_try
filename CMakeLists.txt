@@ -11,13 +11,49 @@ find_package(fmt REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(yaml-cpp REQUIRED)
+# Create an alias so that bare "yaml-cpp" in target_link_libraries works on all platforms
+if(TARGET yaml-cpp::yaml-cpp AND NOT TARGET yaml-cpp)
+  add_library(yaml-cpp ALIAS yaml-cpp::yaml-cpp)
+endif()
 find_package(nlohmann_json REQUIRED)
-set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake/")
+if(NOT DEFINED OpenVINO_DIR)
+  if(APPLE)
+    # macOS: try Homebrew or user-installed path
+    find_path(_OV_CMAKE_DIR "OpenVINOConfig.cmake"
+      PATHS
+        "$ENV{HOME}/intel/openvino/runtime/cmake"
+        "/usr/local/lib/cmake/openvino"
+        "/opt/homebrew/lib/cmake/openvino"
+      NO_DEFAULT_PATH
+    )
+    if(_OV_CMAKE_DIR)
+      set(OpenVINO_DIR "${_OV_CMAKE_DIR}")
+    endif()
+  else()
+    set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake/")
+  endif()
+endif()
 find_package(OpenVINO REQUIRED)
 
 include_directories(${EIGEN3_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR})
+
+# Ensure spdlog and yaml-cpp headers are globally visible (needed on macOS Homebrew)
+find_package(spdlog REQUIRED)
+get_target_property(_spdlog_inc spdlog::spdlog INTERFACE_INCLUDE_DIRECTORIES)
+if(_spdlog_inc)
+  include_directories(${_spdlog_inc})
+endif()
+find_package(yaml-cpp REQUIRED)
+if(TARGET yaml-cpp::yaml-cpp)
+  get_target_property(_yaml_inc yaml-cpp::yaml-cpp INTERFACE_INCLUDE_DIRECTORIES)
+elseif(TARGET yaml-cpp)
+  get_target_property(_yaml_inc yaml-cpp INTERFACE_INCLUDE_DIRECTORIES)
+endif()
+if(_yaml_inc)
+  include_directories(${_yaml_inc})
+endif()
 
 
 add_subdirectory(tools)
@@ -25,6 +61,7 @@ add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
 add_subdirectory(tasks/auto_buff)
 add_subdirectory(tasks/omniperception)
+add_subdirectory(debug)
 
 ####################src###################
 add_executable(standard src/standard.cpp)
@@ -41,7 +78,7 @@ add_executable(mt_dual_camera src/mt_dual_camera.cpp)
 target_link_libraries(standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(mt_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(standard_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(auto_aim_debug_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+target_link_libraries(auto_aim_debug_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io web_debugger)
 target_link_libraries(mt_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(auto_buff_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io ${CERES_LIBRARIES})
 target_link_libraries(auto_buff_debug_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io ${CERES_LIBRARIES})

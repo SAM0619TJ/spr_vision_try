@@ -2,11 +2,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <list>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
 #include <thread>
 #include <yaml-cpp/yaml.h>
 
+#include "debug/web_debugger.hpp"
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
@@ -21,6 +23,60 @@
 #include "tools/thread_safe_queue.hpp"
 
 using namespace std::chrono_literals;
+
+namespace
+{
+
+int to_debug_color(auto_aim::Color color)
+{
+  if (color == auto_aim::Color::blue) return 0;
+  if (color == auto_aim::Color::red) return 1;
+  if (color == auto_aim::Color::purple) return 3;
+  return 2;
+}
+
+int to_debug_number(auto_aim::ArmorName name)
+{
+  switch (name) {
+    case auto_aim::ArmorName::sentry:
+      return 0;
+    case auto_aim::ArmorName::one:
+      return 1;
+    case auto_aim::ArmorName::two:
+      return 2;
+    case auto_aim::ArmorName::three:
+      return 3;
+    case auto_aim::ArmorName::four:
+      return 4;
+    case auto_aim::ArmorName::five:
+      return 5;
+    case auto_aim::ArmorName::outpost:
+      return 6;
+    case auto_aim::ArmorName::base:
+      return 7;
+    default:
+      return 8;
+  }
+}
+
+std::vector<debug::DetectionData> to_debug_detections(const std::list<auto_aim::Armor> & armors)
+{
+  std::vector<debug::DetectionData> detections;
+  detections.reserve(armors.size());
+
+  for (const auto & armor : armors) {
+    debug::DetectionData detection;
+    detection.pts = armor.points;
+    detection.color = to_debug_color(armor.color);
+    detection.number = to_debug_number(armor.name);
+    detection.conf = static_cast<float>(armor.confidence);
+    detections.push_back(detection);
+  }
+
+  return detections;
+}
+
+}  // namespace
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
@@ -45,6 +101,13 @@ int main(int argc, char * argv[])
                         ? config["plotter"]["port"].as<uint16_t>()
                         : 9870;
   tools::Plotter plotter(plotter_host, plotter_port);
+
+  auto web_debug_port = config["web_debugger"] && config["web_debugger"]["port"]
+                          ? config["web_debugger"]["port"].as<int>()
+                          : 8080;
+  debug::WebDebugger web_debugger(web_debug_port);
+  web_debugger.start();
+  tools::logger()->info("Web debugger listening on http://0.0.0.0:{}", web_debug_port);
 
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
@@ -117,11 +180,16 @@ int main(int argc, char * argv[])
   std::chrono::steady_clock::time_point t;
 
   while (!exiter.exit()) {
+    auto frame_start = std::chrono::steady_clock::now();
     camera.read(img, t);
+    auto web_frame = img.clone();
     auto q = gimbal.q(t);
 
     solver.set_R_gimbal2world(q);
     auto armors = yolo.detect(img);
+    auto detections = to_debug_detections(armors);
+    std::vector<debug::ReprojectionData> reprojections;
+
     auto targets = tracker.track(armors, t);
     if (!targets.empty())
       target_queue.push(targets.front());
@@ -136,14 +204,21 @@ int main(int argc, char * argv[])
       for (const Eigen::Vector4d & xyza : armor_xyza_list) {
         auto image_points =
           solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
+        reprojections.push_back({image_points});
         tools::draw_points(img, image_points, {0, 255, 0});
       }
 
       Eigen::Vector4d aim_xyza = planner.debug_xyza;
       auto image_points =
         solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
+      reprojections.push_back({image_points});
       tools::draw_points(img, image_points, {0, 0, 255});
     }
+
+    auto latency_ms =
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frame_start)
+        .count();
+    web_debugger.push(web_frame, detections, reprojections, latency_ms);
 
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("reprojection", img);
