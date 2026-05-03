@@ -2,11 +2,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <list>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
 #include <thread>
 #include <yaml-cpp/yaml.h>
 
+#include "debug/web_debugger.hpp"
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
@@ -25,6 +27,26 @@ using namespace std::chrono_literals;
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
   "{@config-path   | configs/sentry.yaml | 位置参数，yaml配置文件路径 }";
+
+namespace
+{
+std::vector<debug::DetectionData> to_debug_detections(const std::list<auto_aim::Armor> & armors)
+{
+  std::vector<debug::DetectionData> detections;
+  detections.reserve(armors.size());
+  for (const auto & armor : armors) {
+    detections.push_back({armor.points, static_cast<int>(armor.color), static_cast<int>(armor.name),
+                          static_cast<float>(armor.confidence)});
+  }
+  return detections;
+}
+
+void add_debug_reprojection(
+  std::vector<debug::ReprojectionData> & reprojections, const std::vector<cv::Point2f> & points)
+{
+  reprojections.push_back({points});
+}
+}  // namespace
 
 int main(int argc, char * argv[])
 {
@@ -53,6 +75,9 @@ int main(int argc, char * argv[])
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Planner planner(config_path);
+  debug::WebDebugger web_debugger;
+  web_debugger.start();
+  tools::logger()->info("Web debugger listening at http://0.0.0.0:{}", web_debugger.port());
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
@@ -117,6 +142,7 @@ int main(int argc, char * argv[])
   std::chrono::steady_clock::time_point t;
 
   while (!exiter.exit()) {
+    auto t0 = std::chrono::steady_clock::now();
     camera.read(img, t);
     auto q = gimbal.q(t);
 
@@ -128,6 +154,8 @@ int main(int argc, char * argv[])
     else
       target_queue.push(std::nullopt);
 
+    auto debug_detections = to_debug_detections(armors);
+    std::vector<debug::ReprojectionData> debug_reprojections;
     if (!targets.empty()) {
       auto target = targets.front();
 
@@ -137,13 +165,19 @@ int main(int argc, char * argv[])
         auto image_points =
           solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
         tools::draw_points(img, image_points, {0, 255, 0});
+        add_debug_reprojection(debug_reprojections, image_points);
       }
 
       Eigen::Vector4d aim_xyza = planner.debug_xyza;
       auto image_points =
         solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       tools::draw_points(img, image_points, {0, 0, 255});
+      add_debug_reprojection(debug_reprojections, image_points);
     }
+
+    web_debugger.push(
+      img, debug_detections, debug_reprojections,
+      tools::delta_time(std::chrono::steady_clock::now(), t0));
 
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("reprojection", img);
