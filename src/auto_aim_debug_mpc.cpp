@@ -2,7 +2,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <list>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
 #include <thread>
@@ -26,6 +28,27 @@ using namespace std::chrono_literals;
 
 namespace
 {
+
+bool has_env(const char * name)
+{
+  const char * value = std::getenv(name);
+  return value != nullptr && value[0] != '\0';
+}
+
+bool has_display_server()
+{
+  return has_env("DISPLAY") || has_env("WAYLAND_DISPLAY");
+}
+
+bool is_ssh_session()
+{
+  return has_env("SSH_CONNECTION") || has_env("SSH_CLIENT") || has_env("SSH_TTY");
+}
+
+bool yaml_bool_or(const YAML::Node & node, bool default_value)
+{
+  return node ? node.as<bool>() : default_value;
+}
 
 int to_debug_color(auto_aim::Color color)
 {
@@ -102,17 +125,39 @@ int main(int argc, char * argv[])
                         : 9870;
   tools::Plotter plotter(plotter_host, plotter_port);
 
-  auto web_debug_port = config["web_debugger"] && config["web_debugger"]["port"]
-                          ? config["web_debugger"]["port"].as<int>()
-                          : 8080;
-  debug::WebDebugger web_debugger(web_debug_port);
-  web_debugger.start();
-  tools::logger()->info("Web debugger listening on http://0.0.0.0:{}", web_debug_port);
+  auto debug_display_config = config["debug_display"];
+  auto window_config = debug_display_config ? debug_display_config["window"] : YAML::Node();
+  auto web_config = debug_display_config ? debug_display_config["web"] : YAML::Node();
+
+  auto window_enabled = yaml_bool_or(window_config["enabled"], true);
+  auto window_auto_detect = yaml_bool_or(window_config["auto_detect"], true);
+  if (window_enabled && window_auto_detect && !has_display_server()) {
+    tools::logger()->warn(
+      "{} display server found, local debug window disabled. Use the web debugger instead.",
+      is_ssh_session() ? "SSH session without" : "No");
+    window_enabled = false;
+  }
+  if (window_enabled) {
+    cv::namedWindow("reprojection", cv::WINDOW_NORMAL);
+  }
+
+  auto web_debug_enabled = yaml_bool_or(web_config["enabled"], true);
+  auto web_debug_port = web_config && web_config["port"]
+                          ? web_config["port"].as<int>()
+                          : config["web_debugger"] && config["web_debugger"]["port"]
+                              ? config["web_debugger"]["port"].as<int>()
+                              : 8080;
+  std::unique_ptr<debug::WebDebugger> web_debugger;
+  if (web_debug_enabled) {
+    web_debugger = std::make_unique<debug::WebDebugger>(web_debug_port);
+    web_debugger->start();
+    tools::logger()->info("Web debugger listening on http://0.0.0.0:{}", web_debug_port);
+  }
 
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
-  auto_aim::YOLO yolo(config_path, true);
+  auto_aim::YOLO yolo(config_path, window_enabled);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Planner planner(config_path);
@@ -218,12 +263,17 @@ int main(int argc, char * argv[])
     auto latency_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frame_start)
         .count();
-    web_debugger.push(web_frame, detections, reprojections, latency_ms);
+    if (web_debugger) {
+      web_debugger->push(web_frame, detections, reprojections, latency_ms);
+    }
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
+    if (window_enabled) {
+      cv::Mat display_img;
+      cv::resize(img, display_img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+      cv::imshow("reprojection", display_img);
+      auto key = cv::waitKey(1);
+      if (key == 'q') break;
+    }
   }
 
   quit = true;

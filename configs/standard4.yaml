@@ -9,7 +9,17 @@ yolov8_model_path: assets/yolov8.xml
 yolov5_model_path: assets/yolov5.xml
 device: GPU
 min_confidence: 0.8
-use_traditional: true
+use_traditional: false
+
+#####-----web_debug_display-----#####
+debug_display:
+  window:
+    enabled: false
+    auto_detect: false
+  web:
+    enabled: true
+    port: 8080
+
 
 #####-----ROI-----#####
 roi: 
@@ -22,7 +32,7 @@ use_roi: false
 
 #####-----plotter参数-----#####
 plotter:
-  host: "127.0.0.1"
+  host: "10.122.203.112"
   port: 9870
 
 #####-----传统方法参数-----#####
@@ -43,45 +53,46 @@ max_temp_lost_count: 15
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: -2 # degree -2.5
-pitch_offset: 0 # degree 2
-comming_angle: 60 # degree
-leaving_angle: 20 # degree
-decision_speed: 8 # rad/s
-high_speed_delay_time: 0.015 # s
-low_speed_delay_time: 0.015 # s
+yaw_offset: 0.5 # degree -2.5
+pitch_offset: -1.5 # degree 2
+comming_angle: 55 # degree
+leaving_angle: 25 # degree
+decision_speed: 7 # rad/s
+high_speed_delay_time: 0.085 # s
+low_speed_delay_time: 0.085 # s
 
 #####-----shooter参数-----#####
-first_tolerance: 3 # 近距离射击容差，degree
+first_tolerance: 2.5 # 近距离射击容差，degree
 second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-# camera_name: "hikrobot"
-# exposure_ms: 2
-# gain: 16
-# vid_pid: "2bdf:0001"
+camera_name: "hikrobot"
+exposure_ms: 2
+gain: 16.0
+vid_pid: "2bdf:0001"
 
-camera_name: "mindvision"
-exposure_ms: 2.0
-gamma: 0.5
-vid_pid: "f622:d132"
+# camera_name: "mindvision"
+# exposure_ms: 2.0
+# gamma: 0.5
+# vid_pid: "f622:d132"
 
 #  1  0  0
 #  0  1  0
 #  0  0  1
 
-R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+R_gimbal2imubody: [0, 1, 0, -1, 0, 0, 0, 0, -1]
 
-# 重投影误差: 0.3145px
-camera_matrix: [1803.85723,    0.     ,  698.29467,
-            0.     , 1800.27952,  579.92966,
-            0.     ,    0.     ,    1.     ]
-distort_coeffs: [-0.086982, 0.202748, -0.000254, 0.000123, 0.000000]
+# # 重投影误差: 0.214px
+camera_matrix: [2348.28807, 0.00000, 715.8871,  0.000000, 2343.20121, 549.08769, 0.00000, 0.00000, 1.00000]
+distort_coeffs: [-0.113753, 0.476220, -0.000367, 0.000390, 0.000000]
 
-# 相机同理想情况的偏角: yaw-1.61 pitch-0.82 roll-0.61 degree
-R_camera2gimbal: [0.02823004230930648, -0.014076983590428133, 0.99950232778328707, -0.99954530259354468, -0.010995644138609872, 0.028076393521179785, 0.010594940981141165, -0.99984045444409364, -0.014380990321749998]
-t_camera2gimbal: [0.045517325957791413, 0.10544338092767802, 0.034649710880185793]
+# 相机同理想情况的偏角: yaw0.50 pitch0.89 roll-4.09 degree
+# 标定板到世界坐标系原点的水平距离: 1.84 m
+# 标定板同竖直摆放时的偏角: yaw21.15 pitch5.80 roll-95.22 degree
+R_camera2gimbal: [-0.0097593608923142363, 0.014906909346876499, 0.9998412568646573, -0.99740747610409053, -0.07143632359391644, -0.0086705411049835795, 0.0712957325976913, -0.99733376345389468, 0.015565435690953719]
+t_camera2gimbal: [0.02663681156986614, -0.00018454730148609257, 0.10511518672308437]
+
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
@@ -91,6 +102,10 @@ can_interface: "can0"
 
 #####-----gimbal参数-----#####
 com_port: "/dev/gimbal"
+yaw_kp: 0
+yaw_kd: 0
+pitch_kp: 0
+pitch_kd: 0
 
 
 #####-----planner-----#####
