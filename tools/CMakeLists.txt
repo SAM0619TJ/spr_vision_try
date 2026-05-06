@@ -8,8 +8,9 @@ add_library(tools OBJECT
     math_tools.cpp
     plotter.cpp
     trajectory.cpp
+    trajectory_hero.cpp
     recorder.cpp
     logger.cpp
     pid.cpp
-    crc.cpp
+    crc.cpp    
 )

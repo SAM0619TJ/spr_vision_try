@@ -18,3 +18,4 @@ records_25/
 c_cpp_properties.json
 neo/
 .clangd
+compile_commands.json
