@@ -1,0 +1,5 @@
+camera_name: "mindvision"
+exposure_ms: 2.0
+gamma: 1.0
+vid_pid: "f622:d132"
+flip_code: 2

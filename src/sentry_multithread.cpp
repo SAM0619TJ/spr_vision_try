@@ -9,9 +9,8 @@
 #include <thread>
 
 #include "io/camera.hpp"
-#include "io/cboard.hpp"
+#include "io/gimbal/gimbal.hpp"
 #include "io/ros2/ros2.hpp"
-#include "io/usbcamera/usbcamera.hpp"
 #include "tasks/auto_aim/aimer.hpp"
 #include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/solver.hpp"
@@ -46,12 +45,9 @@ int main(int argc, char * argv[])
   auto config_path = cli.get<std::string>(0);
 
   io::ROS2 ros2;
-  io::CBoard cboard(config_path);
+  io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
-  io::USBCamera usbcam1("video0", config_path);
-  io::USBCamera usbcam2("video2", config_path);
-  io::USBCamera usbcam3("video4", config_path);
-  io::USBCamera usbcam4("video6", config_path);
+  io::Camera back_camera("configs/back_mindvision.yaml");
 
   auto_aim::YOLO yolo(config_path, false);
   auto_aim::Solver solver(config_path);
@@ -60,7 +56,7 @@ int main(int argc, char * argv[])
   auto_aim::Shooter shooter(config_path);
 
   omniperception::Decider decider(config_path);
-  omniperception::Perceptron perceptron(&usbcam1, &usbcam2, &usbcam3, &usbcam4, config_path);
+  omniperception::Perceptron perceptron(&back_camera, config_path);
 
   omniperception::DetectionResult switch_target;
   cv::Mat img;
@@ -69,7 +65,7 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, timestamp);
-    Eigen::Quaterniond q = cboard.imu_at(timestamp - 1ms);
+    Eigen::Quaterniond q = gimbal.q(timestamp - 1ms);
     recorder.record(img, q, timestamp);
     /// 自瞄核心逻辑
     solver.set_R_gimbal2world(q);
@@ -106,14 +102,15 @@ int main(int argc, char * argv[])
     }
 
     else {
-      command = aimer.aim(targets, timestamp, cboard.bullet_speed);
+      command = aimer.aim(targets, timestamp, gimbal.state().bullet_speed);
     }
 
     /// 发射逻辑
     command.shoot = shooter.shoot(command, aimer, targets, gimbal_pos);
     // command.shoot = false;
 
-    cboard.send(command);
+    gimbal.send(command.control, command.shoot, static_cast<float>(command.yaw), 0.F, 0.F,
+      static_cast<float>(command.pitch), 0.F, 0.F);
 
     /// ROS2通信
     Eigen::Vector4d target_info = decider.get_target_info(armors, targets);

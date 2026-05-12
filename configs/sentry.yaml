@@ -65,11 +65,11 @@ max_side_ratio: 1.5
 max_rectangular_error: 25 # degree
 min_confidence: 0.8
 
-#####-----cboard参数-----#####
-quaternion_canid: 0x01
-bullet_speed_canid: 0x110
-send_canid: 0xff
-can_interface: "can0"
+#####-----云台串口（哨兵与云台通讯；替代原 CBoard CAN）-----#####
+com_port: "/dev/ttyUSB0"
+baud_rate: 115200
+# 串口协议无左右发射管模式时 Aimer 使用的默认射击模式：0=left_shoot 1=right_shoot 2=both_shoot
+default_shoot_mode: 0
 
 #####-----tracker参数-----#####
 min_detect_count: 5

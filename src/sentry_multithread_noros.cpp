@@ -1,45 +1,28 @@
 #include <fmt/core.h>
 
 #include <chrono>
-#include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
-#include <thread>
 
 #include "io/camera.hpp"
-#include "io/cboard.hpp"
 #include "io/gimbal/gimbal.hpp"
-#include "io/ros2/publish2nav.hpp"
-#include "io/ros2/ros2.hpp"
-#include "io/usbcamera/usbcamera.hpp"
 #include "tasks/auto_aim/aimer.hpp"
 #include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
+#include "tasks/omniperception/perceptron.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
 #include "tools/recorder.hpp"
-#include "tools/yaml.hpp"
 
 using namespace std::chrono;
 
-static io::ShootMode load_default_shoot_mode(const std::string & config_path)
-{
-  try {
-    auto y = tools::load(config_path);
-    if (!y["default_shoot_mode"].IsDefined()) return io::ShootMode::left_shoot;
-    return static_cast<io::ShootMode>(y["default_shoot_mode"].as<int>());
-  } catch (...) {
-    return io::ShootMode::left_shoot;
-  }
-}
-
 const std::string keys =
-  "{help h usage ? |                        | 输出命令行参数说明}"
+  "{help h usage ? |                     | 输出命令行参数说明}"
   "{@config-path   | configs/sentry.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
@@ -55,11 +38,9 @@ int main(int argc, char * argv[])
   }
   auto config_path = cli.get<std::string>(0);
 
-  io::ROS2 ros2;
   io::Gimbal gimbal(config_path);
-  const io::ShootMode shoot_mode = load_default_shoot_mode(config_path);
   io::Camera camera(config_path);
-  io::Camera back_camera("configs/camera.yaml");
+  io::Camera back_camera("configs/back_mindvision.yaml");
 
   auto_aim::YOLO yolo(config_path, false);
   auto_aim::Solver solver(config_path);
@@ -68,53 +49,56 @@ int main(int argc, char * argv[])
   auto_aim::Shooter shooter(config_path);
 
   omniperception::Decider decider(config_path);
+  omniperception::Perceptron perceptron(&back_camera, config_path);
 
+  omniperception::DetectionResult switch_target;
   cv::Mat img;
-
   std::chrono::steady_clock::time_point timestamp;
-  io::Command last_command;
 
   while (!exiter.exit()) {
     camera.read(img, timestamp);
     Eigen::Quaterniond q = gimbal.q(timestamp - 1ms);
-    // recorder.record(img, q, timestamp);
+    recorder.record(img, q, timestamp);
 
-    /// 自瞄核心逻辑
     solver.set_R_gimbal2world(q);
 
     Eigen::Vector3d gimbal_pos = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
 
     auto armors = yolo.detect(img);
 
-    decider.get_invincible_armor(ros2.subscribe_enemy_status());
-
     decider.armor_filter(armors);
-
-    // decider.get_auto_aim_target(armors, ros2.subscribe_autoaim_target());
 
     decider.set_priority(armors);
 
-    auto targets = tracker.track(armors, timestamp);
+    auto detection_queue = perceptron.get_detection_queue();
+
+    decider.sort(detection_queue);
+
+    auto [switch_target, targets] = tracker.track(detection_queue, armors, timestamp);
 
     io::Command command{false, false, 0, 0};
 
-    /// 全向感知逻辑
-    if (tracker.state() == "lost")
-      command = decider.decide(yolo, gimbal_pos, back_camera);
-    else
-      command =
-        aimer.aim(targets, timestamp, gimbal.state().bullet_speed, shoot_mode);
+    if (tracker.state() == "switching") {
+      command.control = switch_target.armors.empty() ? false : true;
+      command.shoot = false;
+      command.pitch = tools::limit_rad(switch_target.delta_pitch);
+      command.yaw = tools::limit_rad(switch_target.delta_yaw + gimbal_pos[0]);
+    }
 
-    /// 发射逻辑
+    else if (tracker.state() == "lost") {
+      command = decider.decide(detection_queue);
+      command.yaw = tools::limit_rad(command.yaw + gimbal_pos[0]);
+    }
+
+    else {
+      command = aimer.aim(targets, timestamp, gimbal.state().bullet_speed);
+    }
+
     command.shoot = shooter.shoot(command, aimer, targets, gimbal_pos);
 
     gimbal.send(command.control, command.shoot, static_cast<float>(command.yaw), 0.F, 0.F,
       static_cast<float>(command.pitch), 0.F, 0.F);
-
-    /// ROS2通信
-    Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
-
-    ros2.publish(target_info);
   }
+
   return 0;
 }
