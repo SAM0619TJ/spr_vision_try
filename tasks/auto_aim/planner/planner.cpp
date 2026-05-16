@@ -28,6 +28,11 @@ Plan Planner::plan(Target target, double bullet_speed) {
     bullet_speed = 22;
   }
 
+  locked_aim_id_ = -1;
+  if (target.name == ArmorName::outpost && target.armor_xyza_list().size() == 3) {
+    locked_aim_id_ = choose_outpost_aim_id(target);
+  }
+
   // 1. Predict fly_time
   auto aim_xyza = choose_aim_xyza(target);
   Eigen::Vector3d xyz = aim_xyza.head<3>();
@@ -151,47 +156,54 @@ void Planner::setup_pitch_solver(const std::string &config_path) {
   pitch_solver_->settings->max_iter = 10;
 }
 
-Eigen::Vector4d Planner::choose_outpost_aim_xyza(const Target &target) const
+int Planner::choose_outpost_aim_id(const Target &target) const
 {
   const auto armor_xyza_list = target.armor_xyza_list();
   const auto armor_num = static_cast<int>(armor_xyza_list.size());
-
-  if (!target.jumped) {
-    if (target.last_id >= 0 && target.last_id < armor_num) {
-      return armor_xyza_list[target.last_id];
-    }
-    return armor_xyza_list[0];
-  }
-
   const Eigen::VectorXd ekf_x = target.ekf_x();
   const auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);
 
-  constexpr double coming_angle = 70 / 57.3;
-  constexpr double leaving_angle = 30 / 57.3;
-
+  // 正对云台的一块板（|delta_angle| 最小）即当前最易看见的那层
+  int facing_id = 0;
+  auto min_abs_delta = 1e10;
   for (int i = 0; i < armor_num; i++) {
     const auto delta_angle =
       tools::limit_rad(armor_xyza_list[i][3] - center_yaw);
-    if (std::abs(delta_angle) > coming_angle) continue;
-    if (ekf_x[7] > 0 && delta_angle < leaving_angle) return armor_xyza_list[i];
-    if (ekf_x[7] < 0 && delta_angle > -leaving_angle) return armor_xyza_list[i];
+    const auto abs_delta = std::abs(delta_angle);
+    if (abs_delta < min_abs_delta) {
+      min_abs_delta = abs_delta;
+      facing_id = i;
+    }
   }
 
-  if (target.last_id >= 0 && target.last_id < armor_num) {
-    return armor_xyza_list[target.last_id];
+  if (!target.jumped) {
+    return facing_id;
   }
-  return armor_xyza_list[0];
+
+  constexpr double coming_angle = 70 / 57.3;
+  constexpr double leaving_angle = 30 / 57.3;
+  for (int i = 0; i < armor_num; i++) {
+    const auto delta_angle =
+      tools::limit_rad(armor_xyza_list[i][3] - center_yaw);
+    if (std::abs(delta_angle) > coming_angle) {
+      continue;
+    }
+    if (ekf_x[7] > 0 && delta_angle < leaving_angle) {
+      return i;
+    }
+    if (ekf_x[7] < 0 && delta_angle > -leaving_angle) {
+      return i;
+    }
+  }
+
+  return facing_id;
 }
 
-Eigen::Vector4d Planner::choose_aim_xyza(const Target &target) const
+Eigen::Vector4d Planner::choose_min_dist_aim_xyza(const Target &target) const
 {
   const auto armor_xyza_list = target.armor_xyza_list();
   if (armor_xyza_list.empty()) {
     throw std::runtime_error("Empty armor_xyza_list");
-  }
-
-  if (target.name == ArmorName::outpost && armor_xyza_list.size() == 3) {
-    return choose_outpost_aim_xyza(target);
   }
 
   auto min_dist = 1e10;
@@ -204,6 +216,54 @@ Eigen::Vector4d Planner::choose_aim_xyza(const Target &target) const
     }
   }
   return best;
+}
+
+Eigen::Vector4d Planner::choose_aim_xyza(const Target &target) const
+{
+  const auto armor_xyza_list = target.armor_xyza_list();
+  if (armor_xyza_list.empty()) {
+    throw std::runtime_error("Empty armor_xyza_list");
+  }
+
+  if (target.name == ArmorName::outpost && armor_xyza_list.size() == 3) {
+    const int id = (locked_aim_id_ >= 0) ? locked_aim_id_ : choose_outpost_aim_id(target);
+    return armor_xyza_list[id];
+  }
+
+  return choose_min_dist_aim_xyza(target);
+}
+
+int Planner::reprojection_aim_id(const Target &target) const
+{
+  const auto armor_xyza_list = target.armor_xyza_list();
+  if (armor_xyza_list.empty()) {
+    throw std::runtime_error("Empty armor_xyza_list");
+  }
+
+  if (target.name == ArmorName::outpost && armor_xyza_list.size() == 3) {
+    return choose_outpost_aim_id(target);
+  }
+
+  auto min_dist = 1e10;
+  int best_id = 0;
+  for (int i = 0; i < static_cast<int>(armor_xyza_list.size()); i++) {
+    const auto dist = armor_xyza_list[i].head<2>().norm();
+    if (dist < min_dist) {
+      min_dist = dist;
+      best_id = i;
+    }
+  }
+  return best_id;
+}
+
+Eigen::Vector4d Planner::reprojection_aim_xyza(const Target &target) const
+{
+  const auto armor_xyza_list = target.armor_xyza_list();
+  if (armor_xyza_list.empty()) {
+    throw std::runtime_error("Empty armor_xyza_list");
+  }
+
+  return armor_xyza_list[reprojection_aim_id(target)];
 }
 
 Eigen::Matrix<double, 2, 1> Planner::aim(const Target &target,

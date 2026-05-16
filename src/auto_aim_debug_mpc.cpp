@@ -183,7 +183,7 @@ int main(int argc, char *argv[]) {
       nlohmann::json data;
       data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
-      data["gimbal_yaw"] = gs.yaw;
+      data["gimbal_yaw"] = -gs.yaw;
       data["gimbal_yaw_vel"] = gs.yaw_vel;
       data["gimbal_pitch"] = gs.pitch;
       data["gimbal_pitch_vel"] = gs.pitch_vel;
@@ -203,8 +203,22 @@ int main(int argc, char *argv[]) {
       data["fired"] = fired ? 1 : 0;
 
       if (target.has_value()) {
-        data["target_z"] = target->ekf_x()[4];  // z
-        data["target_vz"] = target->ekf_x()[5]; // vz
+        const auto x = target->ekf_x();
+        data["target_z"] = x[4];  // z
+        data["target_vz"] = x[5]; // vz
+
+        if (target->name == auto_aim::ArmorName::outpost && x.size() >= 13) {
+          data["target_last_id"] = target->last_id;
+          data["target_update_count"] = target->update_count();
+          data["target_jumped"] = target->jumped ? 1 : 0;
+          data["target_z0"] = x[4];
+          data["target_z1"] = x[11];
+          data["target_z2"] = x[12];
+          data["target_z0_var"] = target->ekf().P(4, 4);
+          data["target_z1_var"] = target->ekf().P(11, 11);
+          data["target_z2_var"] = target->ekf().P(12, 12);
+          data["reprojection_aim_id"] = planner.reprojection_aim_id(*target);
+        }
       }
 
       if (target.has_value()) {
@@ -251,11 +265,38 @@ int main(int argc, char *argv[]) {
         tools::draw_points(img, image_points, {0, 255, 0});
       }
 
-      Eigen::Vector4d aim_xyza = planner.debug_xyza;
+      int aim_id = planner.reprojection_aim_id(target);
+      if (target.name == auto_aim::ArmorName::outpost &&
+          armor_xyza_list.size() == 3) {
+        if (target.last_id >= 0 &&
+            target.last_id < static_cast<int>(armor_xyza_list.size())) {
+          const auto &last_xyza = armor_xyza_list[target.last_id];
+          auto last_image_points = solver.reproject_armor(
+              last_xyza.head(3), last_xyza[3], target.armor_type, target.name);
+          tools::draw_points(img, last_image_points, {255, 255, 0}, 3);
+        }
+
+        const auto x = target.ekf_x();
+        tools::draw_text(
+            img,
+            fmt::format("outpost last={} aim={} jumped={} w={:.2f}",
+                        target.last_id, aim_id, target.jumped ? 1 : 0, x[7]),
+            {20, 35}, {255, 255, 0}, 0.8, 2);
+        if (x.size() >= 13) {
+          tools::draw_text(
+              img,
+              fmt::format("z0={:.3f} z1={:.3f} z2={:.3f} upd={}", x[4],
+                          x[11], x[12], target.update_count()),
+              {20, 70}, {255, 255, 0}, 0.8, 2);
+        }
+      }
+
+      Eigen::Vector4d aim_xyza = armor_xyza_list[aim_id];
       auto image_points = solver.reproject_armor(
           aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       reprojections.push_back({image_points});
-      tools::draw_points(img, image_points, {0, 0, 255});
+      // 红框最后画，避免 aim_id == last_id 时被青色诊断框盖住。
+      tools::draw_points(img, image_points, {0, 0, 255}, 2);
     }
 
     auto latency_ms = std::chrono::duration<double, std::milli>(
