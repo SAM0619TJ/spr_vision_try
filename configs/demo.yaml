@@ -126,3 +126,27 @@ aim_time: 0.150         # s
 wait_time: 0.300        # s
 command_fire_gap: 0.080 # s
 predict_time: 0.150     # s
+
+#####-----滤波器参数集（基于角速度自动切换）-----#####
+filter_param_sets:
+  - name: "slow"
+    v1: 10.0
+    v2: 0.5
+    R_yaw: 0.004
+    R_pitch: 0.004
+    R_distance: 0.09
+    angular_velocity_threshold: 2.0
+  - name: "normal"
+    v1: 100.0
+    v2: 400.0
+    R_yaw: 0.004
+    R_pitch: 0.004
+    R_distance: 0.09
+    angular_velocity_threshold: 8.0
+  - name: "fast"
+    v1: 500.0
+    v2: 1000.0
+    R_yaw: 0.002
+    R_pitch: 0.002
+    R_distance: 0.05
+    angular_velocity_threshold: 999.0

@@ -224,6 +224,11 @@ int main(int argc, char * argv[])
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
 
+  // FPS 统计
+  int frame_count = 0;
+  double fps = 0.0;
+  auto fps_timer = std::chrono::steady_clock::now();
+
   while (!exiter.exit()) {
     auto frame_start = std::chrono::steady_clock::now();
     camera.read(img, t);
@@ -270,6 +275,38 @@ int main(int argc, char * argv[])
     if (window_enabled) {
       cv::Mat display_img;
       cv::resize(img, display_img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+
+      // FPS 计算（每秒更新一次）
+      frame_count++;
+      auto now = std::chrono::steady_clock::now();
+      auto elapsed = std::chrono::duration<double>(now - fps_timer).count();
+      if (elapsed >= 1.0) {
+        fps = frame_count / elapsed;
+        frame_count = 0;
+        fps_timer = now;
+      }
+
+      // 绘制红色瞄准准星
+      int cx = display_img.cols / 2;
+      int cy = display_img.rows / 2;
+      int cross_size = 20;
+      int cross_gap = 8;
+      cv::Scalar cross_color(0, 0, 255);  // 红色
+      // 外圆
+      cv::circle(display_img, {cx, cy}, cross_size, cross_color, 2, cv::LINE_AA);
+      // 十字线（四段，中间留空隙）
+      cv::line(display_img, {cx - cross_size, cy}, {cx - cross_gap, cy}, cross_color, 2, cv::LINE_AA);
+      cv::line(display_img, {cx + cross_gap, cy}, {cx + cross_size, cy}, cross_color, 2, cv::LINE_AA);
+      cv::line(display_img, {cx, cy - cross_size}, {cx, cy - cross_gap}, cross_color, 2, cv::LINE_AA);
+      cv::line(display_img, {cx, cy + cross_gap}, {cx, cy + cross_size}, cross_color, 2, cv::LINE_AA);
+      // 中心点
+      cv::circle(display_img, {cx, cy}, 2, cross_color, -1, cv::LINE_AA);
+
+      // 绘制实时帧率
+      tools::draw_text(
+        display_img, fmt::format("FPS: {:.1f}", fps), {display_img.cols - 150, 30},
+        {0, 255, 255}, 0.8, 2);
+
       cv::imshow("reprojection", display_img);
       auto key = cv::waitKey(1);
       if (key == 'q') break;

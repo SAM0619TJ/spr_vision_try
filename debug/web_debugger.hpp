@@ -15,6 +15,8 @@
 #include <functional>
 #include <opencv2/opencv.hpp>
 
+#include "param_tuner.hpp"
+
 namespace debug
 {
 
@@ -46,6 +48,12 @@ public:
     const std::vector<ReprojectionData> & reprojections,
     double latency_ms);
 
+  // 推送 EKF 状态（用于参数调节面板）
+  void push_ekf_state(const EKFStateData & state);
+
+  // 推送参数集列表
+  void push_param_sets();
+
   bool is_running() const { return running_; }
   int port() const { return port_; }
 
@@ -57,6 +65,8 @@ private:
   // 最新帧数据（加锁保护）
   std::mutex data_mutex_;
   std::string latest_json_;   // 序列化后的 JSON 字符串
+  std::string latest_ekf_json_;
+  std::string latest_param_json_;
 
   // WebSocket 客户端 fd 列表
   std::mutex clients_mutex_;

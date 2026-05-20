@@ -113,6 +113,30 @@ void WebDebugger::push(
   broadcast(ws_frame(json));
 }
 
+void WebDebugger::push_ekf_state(const EKFStateData & state)
+{
+  ParamTuner::instance().push_ekf_state(state);
+  std::string json = ParamTuner::instance().ekf_state_to_json();
+  // 包装为 ekf_state 消息
+  std::string msg = "{\"type\":\"ekf_state\",\"data\":" + json + "}";
+  {
+    std::lock_guard<std::mutex> lk(data_mutex_);
+    latest_ekf_json_ = msg;
+  }
+  broadcast(ws_frame(msg));
+}
+
+void WebDebugger::push_param_sets()
+{
+  std::string json = ParamTuner::instance().param_sets_to_json();
+  std::string msg = "{\"type\":\"param_sets\",\"data\":" + json + "}";
+  {
+    std::lock_guard<std::mutex> lk(data_mutex_);
+    latest_param_json_ = msg;
+  }
+  broadcast(ws_frame(msg));
+}
+
 // ── HTTP + WebSocket 服务主循环 ───────────────────────────────────────────────
 void WebDebugger::serve()
 {
@@ -215,25 +239,46 @@ void WebDebugger::handle_http(int fd)
 
 void WebDebugger::handle_websocket(int fd)
 {
-  // 先推送最新帧
+  // 推送参数集列表
+  {
+    std::lock_guard<std::mutex> lk(data_mutex_);
+    if (!latest_param_json_.empty()) {
+      std::string frame = ws_frame(latest_param_json_);
+      send(fd, frame.c_str(), frame.size(), send_flags());
+    }
+  }
+
+  // 推送最新帧/状态
   {
     std::lock_guard<std::mutex> lk(data_mutex_);
     if (!latest_json_.empty()) {
       std::string frame = ws_frame(latest_json_);
       send(fd, frame.c_str(), frame.size(), send_flags());
     }
+    if (!latest_ekf_json_.empty()) {
+      std::string frame = ws_frame(latest_ekf_json_);
+      send(fd, frame.c_str(), frame.size(), send_flags());
+    }
   }
 
-  // 保持连接直到客户端断开
-  std::vector<uint8_t> buf(256);
+  // 保持连接直到客户端断开，同时处理客户端消息
+  std::vector<uint8_t> buf(4096);
   while (running_) {
-    struct timeval tv{1, 0};
+    struct timeval tv{0, 100000};  // 100ms
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(fd, &fds);
     if (select(fd + 1, &fds, nullptr, nullptr, &tv) > 0) {
       int n = recv(fd, buf.data(), buf.size(), 0);
       if (n <= 0) break;  // 客户端断开
+
+      std::string msg;
+      if (parse_ws_frame(buf, msg) && !msg.empty()) {
+        // 处理来自 GUI 的参数更新
+        ParamTuner::instance().update_from_json(msg);
+        // 更新后重新推送参数集
+        push_param_sets();
+      }
     }
   }
 }
@@ -352,9 +397,40 @@ std::string WebDebugger::ws_frame(const std::string & payload)
 bool WebDebugger::parse_ws_frame(const std::vector<uint8_t> & buf, std::string & out)
 {
   if (buf.size() < 2) return false;
-  // 简单解析，仅用于检测 close frame
+
   uint8_t opcode = buf[0] & 0x0F;
-  if (opcode == 0x8) return false;  // close
+  if (opcode == 0x8) return false;  // close frame
+  if (opcode == 0x9) return false;  // ping (ignore, we don't respond)
+
+  bool masked = (buf[1] & 0x80) != 0;
+  size_t payload_len = buf[1] & 0x7F;
+  size_t pos = 2;
+
+  if (payload_len == 126) {
+    if (buf.size() < 4) return false;
+    payload_len = (buf[2] << 8) | buf[3];
+    pos = 4;
+  } else if (payload_len == 127) {
+    if (buf.size() < 10) return false;
+    payload_len = 0;
+    for (int i = 0; i < 8; ++i) payload_len = (payload_len << 8) | buf[2 + i];
+    pos = 10;
+  }
+
+  uint8_t mask[4] = {0, 0, 0, 0};
+  if (masked) {
+    if (buf.size() < pos + 4) return false;
+    for (int i = 0; i < 4; ++i) mask[i] = buf[pos + i];
+    pos += 4;
+  }
+
+  if (buf.size() < pos + payload_len) return false;
+
+  out.resize(payload_len);
+  for (size_t i = 0; i < payload_len; ++i) {
+    out[i] = buf[pos + i] ^ (masked ? mask[i % 4] : 0);
+  }
+
   return true;
 }
 
