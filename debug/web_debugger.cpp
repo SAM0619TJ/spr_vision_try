@@ -83,7 +83,8 @@ static std::string base64_encode(const uint8_t * data, size_t len)
 }
 
 // ── WebDebugger ───────────────────────────────────────────────────────────────
-WebDebugger::WebDebugger(int port) : port_(port) {}
+WebDebugger::WebDebugger(int port, const std::string & bind_addr)
+: port_(port), bind_addr_(bind_addr) {}
 
 WebDebugger::~WebDebugger() { stop(); }
 
@@ -148,7 +149,7 @@ void WebDebugger::serve()
 
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = INADDR_ANY;
+  addr.sin_addr.s_addr = inet_addr(bind_addr_.c_str());
   addr.sin_port = htons(port_);
 
   if (bind(server_fd, (sockaddr*)&addr, sizeof(addr)) < 0) { close(server_fd); return; }

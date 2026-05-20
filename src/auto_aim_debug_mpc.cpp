@@ -145,12 +145,17 @@ int main(int argc, char *argv[]) {
       : config["web_debugger"] && config["web_debugger"]["port"]
           ? config["web_debugger"]["port"].as<int>()
           : 8080;
+  auto web_debug_bind =
+      web_config && web_config["bind"] ? web_config["bind"].as<std::string>()
+      : config["web_debugger"] && config["web_debugger"]["bind"]
+          ? config["web_debugger"]["bind"].as<std::string>()
+          : "0.0.0.0";
   std::unique_ptr<debug::WebDebugger> web_debugger;
   if (web_debug_enabled) {
-    web_debugger = std::make_unique<debug::WebDebugger>(web_debug_port);
+    web_debugger = std::make_unique<debug::WebDebugger>(web_debug_port, web_debug_bind);
     web_debugger->start();
-    tools::logger()->info("Web debugger listening on http://localhost:{}",
-                          web_debug_port);
+    tools::logger()->info("Web debugger listening on http://{}:{}",
+                          web_debug_bind, web_debug_port);
   }
 
   io::Gimbal gimbal(config_path);

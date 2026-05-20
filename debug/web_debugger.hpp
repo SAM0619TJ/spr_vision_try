@@ -34,7 +34,7 @@ struct ReprojectionData {
 class WebDebugger
 {
 public:
-  explicit WebDebugger(int port = 8080);
+  explicit WebDebugger(int port = 8080, const std::string & bind_addr = "0.0.0.0");
   ~WebDebugger();
 
   // 启动后台服务线程（非阻塞）
@@ -59,6 +59,7 @@ public:
 
 private:
   int port_;
+  std::string bind_addr_;
   std::atomic<bool> running_{false};
   std::thread server_thread_;
 
