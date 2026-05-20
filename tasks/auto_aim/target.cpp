@@ -45,7 +45,8 @@ Target::Target(
   Eigen::MatrixXd P0;
   if (armor_num == 3 && P0_dig.size() == 13) {
     x0.resize(13);
-    x0 << center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, 0, center_z, center_z;
+    x0 << center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, 0, center_z + OUTPOST_ARMOR_Z_STEP_M,
+      center_z - OUTPOST_ARMOR_Z_STEP_M;
     P0 = P0_dig.asDiagonal();
   } else {
     x0.resize(11);

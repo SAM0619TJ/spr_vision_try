@@ -26,68 +26,65 @@
 
 using namespace std::chrono_literals;
 
-namespace
-{
+namespace {
 
-bool has_env(const char * name)
-{
-  const char * value = std::getenv(name);
+bool has_env(const char *name) {
+  const char *value = std::getenv(name);
   return value != nullptr && value[0] != '\0';
 }
 
-bool has_display_server()
-{
+bool has_display_server() {
   return has_env("DISPLAY") || has_env("WAYLAND_DISPLAY");
 }
 
-bool is_ssh_session()
-{
-  return has_env("SSH_CONNECTION") || has_env("SSH_CLIENT") || has_env("SSH_TTY");
+bool is_ssh_session() {
+  return has_env("SSH_CONNECTION") || has_env("SSH_CLIENT") ||
+         has_env("SSH_TTY");
 }
 
-bool yaml_bool_or(const YAML::Node & node, bool default_value)
-{
+bool yaml_bool_or(const YAML::Node &node, bool default_value) {
   return node ? node.as<bool>() : default_value;
 }
 
-int to_debug_color(auto_aim::Color color)
-{
-  if (color == auto_aim::Color::blue) return 0;
-  if (color == auto_aim::Color::red) return 1;
-  if (color == auto_aim::Color::purple) return 3;
+int to_debug_color(auto_aim::Color color) {
+  if (color == auto_aim::Color::blue)
+    return 0;
+  if (color == auto_aim::Color::red)
+    return 1;
+  if (color == auto_aim::Color::purple)
+    return 3;
   return 2;
 }
 
-int to_debug_number(auto_aim::ArmorName name)
-{
+int to_debug_number(auto_aim::ArmorName name) {
   switch (name) {
-    case auto_aim::ArmorName::sentry:
-      return 0;
-    case auto_aim::ArmorName::one:
-      return 1;
-    case auto_aim::ArmorName::two:
-      return 2;
-    case auto_aim::ArmorName::three:
-      return 3;
-    case auto_aim::ArmorName::four:
-      return 4;
-    case auto_aim::ArmorName::five:
-      return 5;
-    case auto_aim::ArmorName::outpost:
-      return 6;
-    case auto_aim::ArmorName::base:
-      return 7;
-    default:
-      return 8;
+  case auto_aim::ArmorName::sentry:
+    return 0;
+  case auto_aim::ArmorName::one:
+    return 1;
+  case auto_aim::ArmorName::two:
+    return 2;
+  case auto_aim::ArmorName::three:
+    return 3;
+  case auto_aim::ArmorName::four:
+    return 4;
+  case auto_aim::ArmorName::five:
+    return 5;
+  case auto_aim::ArmorName::outpost:
+    return 6;
+  case auto_aim::ArmorName::base:
+    return 7;
+  default:
+    return 8;
   }
 }
 
-std::vector<debug::DetectionData> to_debug_detections(const std::list<auto_aim::Armor> & armors)
-{
+std::vector<debug::DetectionData>
+to_debug_detections(const std::list<auto_aim::Armor> &armors) {
   std::vector<debug::DetectionData> detections;
   detections.reserve(armors.size());
 
-  for (const auto & armor : armors) {
+  for (const auto &armor : armors) {
     debug::DetectionData detection;
     detection.pts = armor.points;
     detection.color = to_debug_color(armor.color);
@@ -99,14 +96,13 @@ std::vector<debug::DetectionData> to_debug_detections(const std::list<auto_aim::
   return detections;
 }
 
-}  // namespace
+} // namespace
 
 const std::string keys =
-  "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | configs/sentry.yaml | 位置参数，yaml配置文件路径 }";
+    "{help h usage ? |                        | 输出命令行参数说明}"
+    "{@config-path   | configs/sentry.yaml | 位置参数，yaml配置文件路径 }";
 
-int main(int argc, char * argv[])
-{
+int main(int argc, char *argv[]) {
   tools::Exiter exiter;
 
   cv::CommandLineParser cli(argc, argv, keys);
@@ -118,23 +114,25 @@ int main(int argc, char * argv[])
 
   auto config = YAML::LoadFile(config_path);
   auto plotter_host = config["plotter"] && config["plotter"]["host"]
-                        ? config["plotter"]["host"].as<std::string>()
-                        : "127.0.0.1";
+                          ? config["plotter"]["host"].as<std::string>()
+                          : "127.0.0.1";
   auto plotter_port = config["plotter"] && config["plotter"]["port"]
-                        ? config["plotter"]["port"].as<uint16_t>()
-                        : 9870;
+                          ? config["plotter"]["port"].as<uint16_t>()
+                          : 9870;
   tools::Plotter plotter(plotter_host, plotter_port);
 
   auto debug_display_config = config["debug_display"];
-  auto window_config = debug_display_config ? debug_display_config["window"] : YAML::Node();
-  auto web_config = debug_display_config ? debug_display_config["web"] : YAML::Node();
+  auto window_config =
+      debug_display_config ? debug_display_config["window"] : YAML::Node();
+  auto web_config =
+      debug_display_config ? debug_display_config["web"] : YAML::Node();
 
   auto window_enabled = yaml_bool_or(window_config["enabled"], true);
   auto window_auto_detect = yaml_bool_or(window_config["auto_detect"], true);
   if (window_enabled && window_auto_detect && !has_display_server()) {
-    tools::logger()->warn(
-      "{} display server found, local debug window disabled. Use the web debugger instead.",
-      is_ssh_session() ? "SSH session without" : "No");
+    tools::logger()->warn("{} display server found, local debug window "
+                          "disabled. Use the web debugger instead.",
+                          is_ssh_session() ? "SSH session without" : "No");
     window_enabled = false;
   }
   if (window_enabled) {
@@ -142,16 +140,17 @@ int main(int argc, char * argv[])
   }
 
   auto web_debug_enabled = yaml_bool_or(web_config["enabled"], true);
-  auto web_debug_port = web_config && web_config["port"]
-                          ? web_config["port"].as<int>()
-                          : config["web_debugger"] && config["web_debugger"]["port"]
-                              ? config["web_debugger"]["port"].as<int>()
-                              : 8080;
+  auto web_debug_port =
+      web_config && web_config["port"] ? web_config["port"].as<int>()
+      : config["web_debugger"] && config["web_debugger"]["port"]
+          ? config["web_debugger"]["port"].as<int>()
+          : 8080;
   std::unique_ptr<debug::WebDebugger> web_debugger;
   if (web_debug_enabled) {
     web_debugger = std::make_unique<debug::WebDebugger>(web_debug_port);
     web_debugger->start();
-    tools::logger()->info("Web debugger listening on http://0.0.0.0:{}", web_debug_port);
+    tools::logger()->info("Web debugger listening on http://localhost:{}",
+                          web_debug_port);
   }
 
   io::Gimbal gimbal(config_path);
@@ -175,9 +174,8 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
       auto plan = planner.plan(target, gs.bullet_speed);
 
-      gimbal.send(
-        plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-        plan.pitch_acc);
+      gimbal.send(plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc,
+                  plan.pitch, plan.pitch_vel, plan.pitch_acc);
 
       auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;
@@ -185,7 +183,7 @@ int main(int argc, char * argv[])
       nlohmann::json data;
       data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
-      data["gimbal_yaw"] = gs.yaw;
+      data["gimbal_yaw"] = -gs.yaw;
       data["gimbal_yaw_vel"] = gs.yaw_vel;
       data["gimbal_pitch"] = gs.pitch;
       data["gimbal_pitch_vel"] = gs.pitch_vel;
@@ -205,8 +203,22 @@ int main(int argc, char * argv[])
       data["fired"] = fired ? 1 : 0;
 
       if (target.has_value()) {
-        data["target_z"] = target->ekf_x()[4];   //z
-        data["target_vz"] = target->ekf_x()[5];  //vz
+        const auto x = target->ekf_x();
+        data["target_z"] = x[4];  // z
+        data["target_vz"] = x[5]; // vz
+
+        if (target->name == auto_aim::ArmorName::outpost && x.size() >= 13) {
+          data["target_last_id"] = target->last_id;
+          data["target_update_count"] = target->update_count();
+          data["target_jumped"] = target->jumped ? 1 : 0;
+          data["target_z0"] = x[4];
+          data["target_z1"] = x[11];
+          data["target_z2"] = x[12];
+          data["target_z0_var"] = target->ekf().P(4, 4);
+          data["target_z1_var"] = target->ekf().P(11, 11);
+          data["target_z2_var"] = target->ekf().P(12, 12);
+          data["reprojection_aim_id"] = planner.reprojection_aim_id(*target);
+        }
       }
 
       if (target.has_value()) {
@@ -251,23 +263,50 @@ int main(int argc, char * argv[])
 
       // 当前帧target更新后
       std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
-      for (const Eigen::Vector4d & xyza : armor_xyza_list) {
-        auto image_points =
-          solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
+      for (const Eigen::Vector4d &xyza : armor_xyza_list) {
+        auto image_points = solver.reproject_armor(
+            xyza.head(3), xyza[3], target.armor_type, target.name);
         reprojections.push_back({image_points});
         tools::draw_points(img, image_points, {0, 255, 0});
       }
 
-      Eigen::Vector4d aim_xyza = planner.debug_xyza;
-      auto image_points =
-        solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
+      int aim_id = planner.reprojection_aim_id(target);
+      if (target.name == auto_aim::ArmorName::outpost &&
+          armor_xyza_list.size() == 3) {
+        if (target.last_id >= 0 &&
+            target.last_id < static_cast<int>(armor_xyza_list.size())) {
+          const auto &last_xyza = armor_xyza_list[target.last_id];
+          auto last_image_points = solver.reproject_armor(
+              last_xyza.head(3), last_xyza[3], target.armor_type, target.name);
+          tools::draw_points(img, last_image_points, {255, 255, 0}, 3);
+        }
+
+        const auto x = target.ekf_x();
+        tools::draw_text(
+            img,
+            fmt::format("outpost last={} aim={} jumped={} w={:.2f}",
+                        target.last_id, aim_id, target.jumped ? 1 : 0, x[7]),
+            {20, 35}, {255, 255, 0}, 0.8, 2);
+        if (x.size() >= 13) {
+          tools::draw_text(
+              img,
+              fmt::format("z0={:.3f} z1={:.3f} z2={:.3f} upd={}", x[4],
+                          x[11], x[12], target.update_count()),
+              {20, 70}, {255, 255, 0}, 0.8, 2);
+        }
+      }
+
+      Eigen::Vector4d aim_xyza = armor_xyza_list[aim_id];
+      auto image_points = solver.reproject_armor(
+          aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       reprojections.push_back({image_points});
-      tools::draw_points(img, image_points, {0, 0, 255});
+      // 红框最后画，避免 aim_id == last_id 时被青色诊断框盖住。
+      tools::draw_points(img, image_points, {0, 0, 255}, 2);
     }
 
-    auto latency_ms =
-      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frame_start)
-        .count();
+    auto latency_ms = std::chrono::duration<double, std::milli>(
+                          std::chrono::steady_clock::now() - frame_start)
+                          .count();
     if (web_debugger) {
       web_debugger->push(web_frame, detections, reprojections, latency_ms);
     }
@@ -309,12 +348,14 @@ int main(int argc, char * argv[])
 
       cv::imshow("reprojection", display_img);
       auto key = cv::waitKey(1);
-      if (key == 'q') break;
+      if (key == 'q')
+        break;
     }
   }
 
   quit = true;
-  if (plan_thread.joinable()) plan_thread.join();
+  if (plan_thread.joinable())
+    plan_thread.join();
   gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
 
   return 0;

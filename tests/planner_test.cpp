@@ -13,14 +13,12 @@
 
 using namespace std::chrono_literals;
 
-const std::string keys =
-  "{help h usage ? |     | 输出命令行参数说明    }"
-  "{d              | 3.0 | Target距离(m)       }"
-  "{w              | 5.0 | Target角速度(rad/s) }"
-  "{@config-path   |     | yaml配置文件路径     }";
+const std::string keys = "{help h usage ? |     | 输出命令行参数说明    }"
+                         "{d              | 3.0 | Target距离(m)       }"
+                         "{w              | 5.0 | Target角速度(rad/s) }"
+                         "{@config-path   |     | yaml配置文件路径     }";
 
-int main(int argc, char * argv[])
-{
+int main(int argc, char *argv[]) {
   cv::CommandLineParser cli(argc, argv, keys);
   auto config_path = cli.get<std::string>("@config-path");
   auto d = cli.get<double>("d");
@@ -45,9 +43,8 @@ int main(int argc, char * argv[])
     auto gs = gimbal.state();
     auto plan = planner.plan(target, gs.bullet_speed);
 
-    gimbal.send(
-      plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-      plan.pitch_acc);
+    gimbal.send(plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc,
+                plan.pitch, plan.pitch_vel, plan.pitch_acc);
 
     nlohmann::json data;
     data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
