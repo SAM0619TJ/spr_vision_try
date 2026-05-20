@@ -1,7 +1,9 @@
 #include "target.hpp"
 
+#include <chrono>
 #include <numeric>
 
+#include "debug/param_tuner.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 
@@ -164,8 +166,11 @@ void Target::predict(double dt)
     v1 = 10;
     v2 = 0.1;
   } else {
-    v1 = 100;
-    v2 = 400;
+    // 使用 ParamTuner 根据角速度动态选择 v1/v2
+    double angular_velocity = ekf_.x[7];  // 当前估计角速度
+    const auto & param = debug::ParamTuner::instance().select(angular_velocity);
+    v1 = param.v1;
+    v2 = param.v2;
   }
   // clang-format off
   Eigen::MatrixXd Q{
@@ -299,9 +304,16 @@ void Target::update_ypda(const Armor & armor, int id)
     double yaw_resid = std::abs(delta_angle);
     r_yaw_scale += std::min(yaw_resid / 0.15, 3.0);
   }
+
+  // 使用 ParamTuner 获取动态 R 参数
+  const auto & param = debug::ParamTuner::instance().select(ekf_.x[7]);
+  double R_yaw = param.R_yaw;
+  double R_pitch = param.R_pitch;
+  double R_distance = param.R_distance;
+
   Eigen::VectorXd R_dig{
-    {4e-3 * r_yaw_scale, 4e-3 * r_yaw_scale, log(std::abs(delta_angle) + 1) + 1,
-     log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2}};
+    {R_yaw * r_yaw_scale, R_pitch * r_yaw_scale, log(std::abs(delta_angle) + 1) + 1,
+     log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + R_distance}};
   Eigen::MatrixXd R = R_dig.asDiagonal();
 
   // 定义非线性转换函数h: x -> z
@@ -326,6 +338,36 @@ void Target::update_ypda(const Armor & armor, int id)
   Eigen::VectorXd z{{ypd[0], ypd[1], ypd[2], ypr[0]}};  //获得观测量
 
   ekf_.update(z, H, R, h, z_subtract);
+
+  // 推送 EKF 状态到调试面板
+  {
+    debug::EKFStateData state;
+    state.timestamp = std::chrono::duration<double>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+    state.x = ekf_.x[0];
+    state.y = ekf_.x[2];
+    state.z = ekf_.x[4];
+    state.vx = ekf_.x[1];
+    state.vy = ekf_.x[3];
+    state.vz = ekf_.x[5];
+    state.yaw = ekf_.x[6];
+    state.w = ekf_.x[7];
+    state.r = ekf_.x[8];
+    state.l = (ekf_.x.size() > 9) ? ekf_.x[9] : 0;
+    state.h = (ekf_.x.size() > 10) ? ekf_.x[10] : 0;
+    state.P_dim = std::min(static_cast<int>(ekf_.P.rows()), 13);
+    for (int i = 0; i < state.P_dim; ++i) state.P_diag[i] = ekf_.P(i, i);
+    state.v1 = param.v1;
+    state.v2 = param.v2;
+    state.R_yaw = R_yaw;
+    state.R_pitch = R_pitch;
+    state.R_distance = R_distance;
+    state.nis = ekf_.last_nis;
+    state.nis_fail_count = ekf_.recent_nis_failures.size();
+    state.converged = is_converged_;
+    state.active_param_set = param.name;
+    debug::ParamTuner::instance().push_ekf_state(state);
+  }
 }
 
 Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }

@@ -26,4 +26,4 @@ add_library(auto_aim OBJECT
     planner/planner.cpp
 )
 
-target_link_libraries(auto_aim io openvino::runtime tinympcstatic)
+target_link_libraries(auto_aim io openvino::runtime tinympcstatic web_debugger)
