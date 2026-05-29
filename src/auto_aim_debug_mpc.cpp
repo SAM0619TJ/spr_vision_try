@@ -10,6 +10,7 @@
 #include <thread>
 #include <yaml-cpp/yaml.h>
 
+#include "debug/debug_bus.hpp"
 #include "debug/web_debugger.hpp"
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
@@ -46,56 +47,6 @@ bool yaml_bool_or(const YAML::Node &node, bool default_value) {
   return node ? node.as<bool>() : default_value;
 }
 
-int to_debug_color(auto_aim::Color color) {
-  if (color == auto_aim::Color::blue)
-    return 0;
-  if (color == auto_aim::Color::red)
-    return 1;
-  if (color == auto_aim::Color::purple)
-    return 3;
-  return 2;
-}
-
-int to_debug_number(auto_aim::ArmorName name) {
-  switch (name) {
-  case auto_aim::ArmorName::sentry:
-    return 0;
-  case auto_aim::ArmorName::one:
-    return 1;
-  case auto_aim::ArmorName::two:
-    return 2;
-  case auto_aim::ArmorName::three:
-    return 3;
-  case auto_aim::ArmorName::four:
-    return 4;
-  case auto_aim::ArmorName::five:
-    return 5;
-  case auto_aim::ArmorName::outpost:
-    return 6;
-  case auto_aim::ArmorName::base:
-    return 7;
-  default:
-    return 8;
-  }
-}
-
-std::vector<debug::DetectionData>
-to_debug_detections(const std::list<auto_aim::Armor> &armors) {
-  std::vector<debug::DetectionData> detections;
-  detections.reserve(armors.size());
-
-  for (const auto &armor : armors) {
-    debug::DetectionData detection;
-    detection.pts = armor.points;
-    detection.color = to_debug_color(armor.color);
-    detection.number = to_debug_number(armor.name);
-    detection.conf = static_cast<float>(armor.confidence);
-    detections.push_back(detection);
-  }
-
-  return detections;
-}
-
 } // namespace
 
 const std::string keys =
@@ -124,8 +75,6 @@ int main(int argc, char *argv[]) {
   auto debug_display_config = config["debug_display"];
   auto window_config =
       debug_display_config ? debug_display_config["window"] : YAML::Node();
-  auto web_config =
-      debug_display_config ? debug_display_config["web"] : YAML::Node();
 
   auto window_enabled = yaml_bool_or(window_config["enabled"], true);
   auto window_auto_detect = yaml_bool_or(window_config["auto_detect"], true);
@@ -139,24 +88,7 @@ int main(int argc, char *argv[]) {
     cv::namedWindow("reprojection", cv::WINDOW_NORMAL);
   }
 
-  auto web_debug_enabled = yaml_bool_or(web_config["enabled"], true);
-  auto web_debug_port =
-      web_config && web_config["port"] ? web_config["port"].as<int>()
-      : config["web_debugger"] && config["web_debugger"]["port"]
-          ? config["web_debugger"]["port"].as<int>()
-          : 8080;
-  auto web_debug_bind =
-      web_config && web_config["bind"] ? web_config["bind"].as<std::string>()
-      : config["web_debugger"] && config["web_debugger"]["bind"]
-          ? config["web_debugger"]["bind"].as<std::string>()
-          : "0.0.0.0";
-  std::unique_ptr<debug::WebDebugger> web_debugger;
-  if (web_debug_enabled) {
-    web_debugger = std::make_unique<debug::WebDebugger>(web_debug_port, web_debug_bind);
-    web_debugger->start();
-    tools::logger()->info("Web debugger listening on http://{}:{}",
-                          web_debug_bind, web_debug_port);
-  }
+  debug::DebugBus::instance().load_config(config);
 
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
@@ -249,12 +181,10 @@ int main(int argc, char *argv[]) {
   while (!exiter.exit()) {
     auto frame_start = std::chrono::steady_clock::now();
     camera.read(img, t);
-    auto web_frame = img.clone();
     auto q = gimbal.q(t);
 
     solver.set_R_gimbal2world(q);
     auto armors = yolo.detect(img);
-    auto detections = to_debug_detections(armors);
     std::vector<debug::ReprojectionData> reprojections;
 
     auto targets = tracker.track(armors, t);
@@ -312,9 +242,8 @@ int main(int argc, char *argv[]) {
     auto latency_ms = std::chrono::duration<double, std::milli>(
                           std::chrono::steady_clock::now() - frame_start)
                           .count();
-    if (web_debugger) {
-      web_debugger->push(web_frame, detections, reprojections, latency_ms);
-    }
+
+    debug::DebugBus::instance().post({img.clone(), &armors, reprojections, latency_ms});
 
     if (window_enabled) {
       cv::Mat display_img;
@@ -362,6 +291,8 @@ int main(int argc, char *argv[]) {
   if (plan_thread.joinable())
     plan_thread.join();
   gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
+
+  debug::DebugBus::instance().shutdown();
 
   return 0;
 }

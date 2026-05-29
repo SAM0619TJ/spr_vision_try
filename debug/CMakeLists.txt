@@ -1,6 +1,8 @@
 set(DEBUG_SOURCES
   web_debugger.cpp
   param_tuner.cpp
+  debug_bus.cpp
+  sinks/web_sink.cpp
 )
 
 add_library(web_debugger STATIC ${DEBUG_SOURCES})

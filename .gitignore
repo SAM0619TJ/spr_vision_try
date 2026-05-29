@@ -19,3 +19,4 @@ c_cpp_properties.json
 neo/
 .clangd
 compile_commands.json
+.claude/
