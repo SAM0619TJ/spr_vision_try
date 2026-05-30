@@ -11,14 +11,13 @@ device: GPU
 min_confidence: 0.8
 use_traditional: false
 
-#####-----web_debug_display-----#####
-debug_display:
-  window:
-    enabled: false
-    auto_detect: false
-  web:
-    enabled: true
-    port: 8080
+#####-----debug_bus-----#####
+debug_bus:
+  sinks:
+    web:
+      enabled: true
+      port: 8080
+      bind: "0.0.0.0"
 
 
 #####-----ROI-----#####

@@ -26,14 +26,13 @@ plotter:
   host: "10.122.173.126"
   port: 9870
 
-#####-----调试显示参数-----#####
-debug_display:
-  window:
-    enabled: true
-    auto_detect: true
-  web:
-    enabled: true
-    port: 8080
+#####-----debug_bus-----#####
+debug_bus:
+  sinks:
+    web:
+      enabled: true
+      port: 8080
+      bind: "0.0.0.0"
 
 #####-----USB相机参数-----#####
 image_width: 1280
