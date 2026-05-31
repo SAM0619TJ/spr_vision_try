@@ -1,5 +1,5 @@
-#enemy_color: "red"
-enemy_color: "blue"
+enemy_color: "red"
+#enemy_color: "blue"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov5
@@ -133,3 +133,34 @@ model: "assets/yolo11_buff_int8.xml"
 #####-----buff_aimer参数-----#####
 fire_gap_time: 0.520   # s
 predict_time: 0.100     # s
+
+
+
+
+#####-----滤波器参数集（基于角速度自动切换）-----#####
+# 角速度阈值从小到大排列，当前 |w| < threshold 时使用该参数集
+# v1: 位置过程噪声（越大跟踪越快但越抖）
+# v2: 角度过程噪声（越大角度响应越快）
+# R_yaw/R_pitch/R_distance: 观测噪声（越小越信任观测值）
+filter_param_sets:
+  - name: "slow"
+    v1: 10.0
+    v2: 0.5
+    R_yaw: 0.004
+    R_pitch: 0.004
+    R_distance: 0.09
+    angular_velocity_threshold: 2.0   # |w| < 2 rad/s 时使用此参数集（慢速/旋转目标）
+  - name: "normal"
+    v1: 100.0
+    v2: 400.0
+    R_yaw: 0.004
+    R_pitch: 0.004
+    R_distance: 0.09
+    angular_velocity_threshold: 8.0   # 2 <= |w| < 8 时使用（常规目标）
+  - name: "fast"
+    v1: 500.0
+    v2: 1000.0
+    R_yaw: 0.002
+    R_pitch: 0.002
+    R_distance: 0.05
+    angular_velocity_threshold: 999.0 # |w| >= 8 时使用（快速平移目标）
