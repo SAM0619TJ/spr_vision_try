@@ -5,12 +5,14 @@
 #include <cstdlib>
 #include <list>
 #include <memory>
+#include <optional>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
 #include <thread>
 #include <yaml-cpp/yaml.h>
 
 #include "debug/debug_bus.hpp"
+#include "debug/param_tuner.hpp"
 #include "debug/web_debugger.hpp"
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
@@ -88,6 +90,7 @@ int main(int argc, char *argv[]) {
     cv::namedWindow("reprojection", cv::WINDOW_NORMAL);
   }
 
+  debug::ParamTuner::instance().load_from_yaml(config_path);
   debug::DebugBus::instance().load_config(config);
 
   io::Gimbal gimbal(config_path);

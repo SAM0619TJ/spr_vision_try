@@ -59,6 +59,14 @@ const FilterParamSet & ParamTuner::select(double angular_velocity) const
 {
   std::lock_guard<std::mutex> lk(mutex_);
 
+  if (param_sets_.empty()) {
+    static const FilterParamSet default_param{
+      "normal", 100.0, 400.0, 4e-3, 4e-3, 9e-2, 999.0};
+    tools::logger()->warn("[ParamTuner] No filter param sets loaded, using default normal set");
+    active_index_ = 0;
+    return default_param;
+  }
+
   double w = std::abs(angular_velocity);
 
   for (size_t i = 0; i < param_sets_.size(); ++i) {
