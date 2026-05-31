@@ -179,6 +179,7 @@ int main(int argc, char *argv[]) {
   // FPS 统计
   int frame_count = 0;
   double fps = 0.0;
+  std::string fps_text = "FPS: --";
   auto fps_timer = std::chrono::steady_clock::now();
 
   while (!exiter.exit()) {
@@ -260,28 +261,19 @@ int main(int argc, char *argv[]) {
         fps = frame_count / elapsed;
         frame_count = 0;
         fps_timer = now;
+        fps_text = fmt::format("FPS:{:.0f}", fps);
       }
 
-      // 绘制红色瞄准准星
-      int cx = display_img.cols / 2;
-      int cy = display_img.rows / 2;
-      int cross_size = 20;
-      int cross_gap = 8;
-      cv::Scalar cross_color(0, 0, 255);  // 红色
-      // 外圆
-      cv::circle(display_img, {cx, cy}, cross_size, cross_color, 2, cv::LINE_AA);
-      // 十字线（四段，中间留空隙）
-      cv::line(display_img, {cx - cross_size, cy}, {cx - cross_gap, cy}, cross_color, 2, cv::LINE_AA);
-      cv::line(display_img, {cx + cross_gap, cy}, {cx + cross_size, cy}, cross_color, 2, cv::LINE_AA);
-      cv::line(display_img, {cx, cy - cross_size}, {cx, cy - cross_gap}, cross_color, 2, cv::LINE_AA);
-      cv::line(display_img, {cx, cy + cross_gap}, {cx, cy + cross_size}, cross_color, 2, cv::LINE_AA);
-      // 中心点
-      cv::circle(display_img, {cx, cy}, 2, cross_color, -1, cv::LINE_AA);
+      const int cx = display_img.cols / 2;
+      const int cy = display_img.rows / 2;
+      const int arm = 12;
+      const cv::Scalar red(0, 0, 255);
+      cv::line(display_img, {cx - arm, cy}, {cx + arm, cy}, red, 1);
+      cv::line(display_img, {cx, cy - arm}, {cx, cy + arm}, red, 1);
 
-      // 绘制实时帧率
-      tools::draw_text(
-        display_img, fmt::format("FPS: {:.1f}", fps), {display_img.cols - 150, 30},
-        {0, 255, 255}, 0.8, 2);
+      cv::putText(
+        display_img, fps_text, {display_img.cols - 72, 18},
+        cv::FONT_HERSHEY_SIMPLEX, 0.45, {255, 255, 0}, 1, cv::LINE_8);
 
       cv::imshow("reprojection", display_img);
       auto key = cv::waitKey(1);

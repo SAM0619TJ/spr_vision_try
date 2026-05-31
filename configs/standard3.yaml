@@ -15,17 +15,17 @@ use_traditional: true
 #####-----web_debug_display-----#####
 debug_display:
   window:
-    enabled: false
+    enabled: true
     auto_detect: true
   web:
-    enabled: true
+    enabled: false
     port: 8080
 
 #####-----debug_bus-----#####
 debug_bus:
   sinks:
     web:
-      enabled: true
+      enabled: false
       port: 8080
       bind: "0.0.0.0"
 
